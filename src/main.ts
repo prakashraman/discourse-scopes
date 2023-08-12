@@ -1,8 +1,13 @@
-import { createOutputDir, readContents } from './utils';
-import { chunk, map, uniq } from 'lodash';
+import {
+  createOutputDir,
+  readContents,
+  getKeyAndTopicsFromText,
+  Dataset,
+  createDatasetFromMessages,
+} from './utils';
+import { chunk, uniq } from 'lodash';
 import { writeFileSync } from 'fs';
 import { Configuration, OpenAIApi } from 'openai';
-import { parse } from 'yaml';
 import { resolve } from 'path';
 
 const outputDir = createOutputDir();
@@ -19,36 +24,41 @@ console.log('storing cleaned conversation at:', cleanedFiledPath);
 writeFileSync(cleanedFiledPath, conversations.join('\n'));
 
 const chunks = chunk(conversations, 5);
-const c = chunks[0];
-const promptInput = c
-  .map((l, index) => {
-    return [`[ID: ${String.fromCharCode(65 + index)}]`, l, '', ''].join('\n');
-  })
-  .join('\n');
+// const c = chunks[0];
+// const promptInput = c
+//   .map((l, index) => {
+//     return [`[ID: ${String.fromCharCode(65 + index)}]`, l, '', ''].join('\n');
+//   })
+//   .join('\n');
 
-const prompt = [
-  'give me at most 3 topics discussed for each of the sentences below. Let the output be just the topics and nothing else. Let the format be YAML',
-  '',
-  '',
-  promptInput,
-].join('\n');
+// const prompt = [
+//   'give me at most 3 topics discussed for each of the sentences below. Let the output be just the topics and nothing else. Let the format be YAML',
+//   '',
+//   '',
+//   promptInput,
+// ].join('\n');
 
 var allTopics = [];
+var bank: { [key: string]: string[] } = {};
 
-const queryOpenAi = async () => {
+const queryOpenAi = async (dataset: Dataset) => {
   try {
     const completion = await OPENAI.createCompletion({
       model: 'text-davinci-003',
-      prompt,
+      prompt: dataset.prompt,
       max_tokens: 300,
     });
-    const text = completion.data.choices[0].text;
-    // console.log(text);
-    const parsed = parse(text);
-    // console.log(parsed);
-
-    map(parsed, (item) => {
-      if (item) allTopics = [...allTopics, ...item];
+    const content = completion.data.choices[0].text;
+    console.log(content);
+    content.split('\n').forEach((text) => {
+      console.log({ text });
+      const data = getKeyAndTopicsFromText(text);
+      console.log({ data });
+      const message = dataset.messageMap[data.key];
+      data.topics.forEach((topic) => {
+        if (!bank[topic]) bank[topic] = [];
+        bank[topic].push(message);
+      });
     });
   } catch (e) {
     console.log({ e });
@@ -64,6 +74,13 @@ const writeAllTopics = () => {
 };
 
 (async () => {
-  await queryOpenAi();
+  // for (let index = 0; index < chunks.length; index++) {
+  for (let index = 0; index < 1; index++) {
+    const c = chunks[0];
+    const dataset = createDatasetFromMessages(c);
+    await queryOpenAi(dataset);
+  }
+
   writeAllTopics();
+  console.log({ bank });
 })();
