@@ -1,34 +1,69 @@
-/**
- * Some predefined delay values (in milliseconds).
- */
-export enum Delays {
-  Short = 500,
-  Medium = 2000,
-  Long = 5000,
-}
+import { createOutputDir, readContents } from './utils';
+import { chunk, map, uniq } from 'lodash';
+import { writeFileSync } from 'fs';
+import { Configuration, OpenAIApi } from 'openai';
+import { parse } from 'yaml';
+import { resolve } from 'path';
 
-/**
- * Returns a Promise<string> that resolves after a given time.
- *
- * @param {string} name - A name.
- * @param {number=} [delay=Delays.Medium] - A number of milliseconds to delay resolution of the Promise.
- * @returns {Promise<string>}
- */
-function delayedHello(
-  name: string,
-  delay: number = Delays.Medium,
-): Promise<string> {
-  return new Promise((resolve: (value?: string) => void) =>
-    setTimeout(() => resolve(`Hello, ${name}`), delay),
-  );
-}
+const outputDir = createOutputDir();
 
-// Please see the comment in the .eslintrc.json file about the suppressed rule!
-// Below is an example of how to use ESLint errors suppression. You can read more
-// at https://eslint.org/docs/latest/user-guide/configuring/rules#disabling-rules
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+const CONFIGURATION = new Configuration({
+  apiKey: OPENAI_API_KEY,
+});
+const OPENAI = new OpenAIApi(CONFIGURATION);
 
-// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
-export async function greeter(name: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-  // The name parameter should be of type string. Any is used only to trigger the rule.
-  return await delayedHello(name, Delays.Long);
-}
+const conversations = readContents();
+const cleanedFiledPath = outputDir + '/' + 'conversations-cleaned.txt';
+console.log('storing cleaned conversation at:', cleanedFiledPath);
+writeFileSync(cleanedFiledPath, conversations.join('\n'));
+
+const chunks = chunk(conversations, 5);
+const c = chunks[0];
+const promptInput = c
+  .map((l, index) => {
+    return [`[ID: ${String.fromCharCode(65 + index)}]`, l, '', ''].join('\n');
+  })
+  .join('\n');
+
+const prompt = [
+  'give me at most 3 topics discussed for each of the sentences below. Let the output be just the topics and nothing else. Let the format be YAML',
+  '',
+  '',
+  promptInput,
+].join('\n');
+
+var allTopics = [];
+
+const queryOpenAi = async () => {
+  try {
+    const completion = await OPENAI.createCompletion({
+      model: 'text-davinci-003',
+      prompt,
+      max_tokens: 300,
+    });
+    const text = completion.data.choices[0].text;
+    // console.log(text);
+    const parsed = parse(text);
+    // console.log(parsed);
+
+    map(parsed, (item) => {
+      if (item) allTopics = [...allTopics, ...item];
+    });
+  } catch (e) {
+    console.log({ e });
+    console.log(e.message);
+  }
+};
+
+const writeAllTopics = () => {
+  const allTopicsPath = resolve(outputDir, 'all-topics.txt');
+  console.log('writing all topics to: ', allTopicsPath);
+  console.log(allTopics);
+  writeFileSync(allTopicsPath, uniq(allTopics).join('\n'));
+};
+
+(async () => {
+  await queryOpenAi();
+  writeAllTopics();
+})();

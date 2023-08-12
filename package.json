@@ -2,12 +2,13 @@
   "name": "node-typescript-boilerplate",
   "version": "0.0.0",
   "description": "Minimalistic boilerplate to quick-start Node.js development in TypeScript.",
-  "type": "module",
   "engines": {
     "node": ">= 18.12 <19"
   },
   "devDependencies": {
     "@types/jest": "~29.5",
+    "@types/js-yaml": "^4.0.5",
+    "@types/lodash": "^4.14.197",
     "@types/node": "~18",
     "@typescript-eslint/eslint-plugin": "~6.2",
     "@typescript-eslint/parser": "~6.2",
@@ -19,10 +20,12 @@
     "rimraf": "~5.0",
     "ts-api-utils": "~1.0",
     "ts-jest": "~29.1",
+    "ts-node": "^10.9.1",
     "typescript": "~5.1"
   },
   "scripts": {
     "start": "node build/src/main.js",
+    "dev": "npx ts-node src/main.ts",
     "clean": "rimraf coverage build tmp",
     "prebuild": "npm run lint",
     "build": "tsc -p tsconfig.json",
@@ -36,7 +39,14 @@
   "author": "Jakub Synowiec <jsynowiec@users.noreply.github.com>",
   "license": "Apache-2.0",
   "dependencies": {
-    "tslib": "~2.6"
+    "fs": "^0.0.1-security",
+    "js-yaml": "^4.1.0",
+    "lodash": "^4.17.21",
+    "moment": "^2.29.4",
+    "openai": "^3.3.0",
+    "openai-agent": "^1.6.0",
+    "tslib": "~2.6",
+    "yaml": "^2.3.1"
   },
   "volta": {
     "node": "18.12.1"
