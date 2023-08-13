@@ -4,13 +4,25 @@ import {
   getKeyAndTopicsFromText,
   Dataset,
   createDatasetFromMessages,
+  getArgs,
 } from './utils';
-import { chunk, uniq } from 'lodash';
-import { writeFileSync } from 'fs';
+import { chunk, uniq, map } from 'lodash';
+import { writeFileSync, appendFileSync, existsSync } from 'fs';
 import { Configuration, OpenAIApi } from 'openai';
 import { resolve } from 'path';
+import slugify from 'slugify';
 
-const outputDir = createOutputDir();
+const args = getArgs();
+
+if (!args['conversations'])
+  throw new Error('"conversions" parameter is missing.');
+
+if (!args['out'])
+  throw new Error(
+    '"out" parameter is missing. this parameter determines where the output will be stored',
+  );
+
+const outputDir = createOutputDir(args['out']);
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const CONFIGURATION = new Configuration({
@@ -19,45 +31,38 @@ const CONFIGURATION = new Configuration({
 const OPENAI = new OpenAIApi(CONFIGURATION);
 
 const conversations = readContents();
-const cleanedFiledPath = outputDir + '/' + 'conversations-cleaned.txt';
+const cleanedFiledPath = outputDir + '/' + '__conversations-cleaned.txt';
 console.log('storing cleaned conversation at:', cleanedFiledPath);
+console.log(`parsing through conversations: `, conversations.length);
 writeFileSync(cleanedFiledPath, conversations.join('\n'));
 
 const chunks = chunk(conversations, 5);
-// const c = chunks[0];
-// const promptInput = c
-//   .map((l, index) => {
-//     return [`[ID: ${String.fromCharCode(65 + index)}]`, l, '', ''].join('\n');
-//   })
-//   .join('\n');
-
-// const prompt = [
-//   'give me at most 3 topics discussed for each of the sentences below. Let the output be just the topics and nothing else. Let the format be YAML',
-//   '',
-//   '',
-//   promptInput,
-// ].join('\n');
 
 var allTopics = [];
 var bank: { [key: string]: string[] } = {};
 
 const queryOpenAi = async (dataset: Dataset) => {
+  console.log('querying next set of conversations on openai');
   try {
     const completion = await OPENAI.createCompletion({
       model: 'text-davinci-003',
       prompt: dataset.prompt,
       max_tokens: 300,
     });
+    // console.log({ dataset });
     const content = completion.data.choices[0].text;
-    console.log(content);
+    // console.log(content);
     content.split('\n').forEach((text) => {
-      console.log({ text });
+      // console.log({ text });
       const data = getKeyAndTopicsFromText(text);
-      console.log({ data });
+      // console.log({ data });
+      // console.log('text:', text);
       const message = dataset.messageMap[data.key];
       data.topics.forEach((topic) => {
-        if (!bank[topic]) bank[topic] = [];
-        bank[topic].push(message);
+        const slugTopic = slugify(topic, { lower: true, trim: true });
+        if (!bank[slugTopic]) bank[slugTopic] = [];
+        bank[slugTopic].push(message);
+        allTopics.push(topic);
       });
     });
   } catch (e) {
@@ -67,20 +72,30 @@ const queryOpenAi = async (dataset: Dataset) => {
 };
 
 const writeAllTopics = () => {
-  const allTopicsPath = resolve(outputDir, 'all-topics.txt');
+  const allTopicsPath = resolve(outputDir, '__all-topics.txt');
   console.log('writing all topics to: ', allTopicsPath);
-  console.log(allTopics);
   writeFileSync(allTopicsPath, uniq(allTopics).join('\n'));
 };
 
+const flushBank = () => {
+  console.log('flushing bank and writing to all topic files');
+  map(bank, (messages, topic) => {
+    const topicPath = resolve(outputDir, `${topic}.txt`);
+    appendFileSync(topicPath, ['\n', ...messages].join('\n'));
+  });
+  bank = {}; // empties the bank
+};
+
 (async () => {
-  // for (let index = 0; index < chunks.length; index++) {
-  for (let index = 0; index < 1; index++) {
-    const c = chunks[0];
+  for (let index = 0; index < chunks.length; index++) {
+    // for (let index = 0; index < 1; index++) {
+    const c = chunks[index];
     const dataset = createDatasetFromMessages(c);
     await queryOpenAi(dataset);
-  }
 
+    if (index % 3 == 0) flushBank();
+  }
+  flushBank();
   writeAllTopics();
-  console.log({ bank });
+  console.log('and... done.');
 })();

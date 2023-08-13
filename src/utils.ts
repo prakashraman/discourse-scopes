@@ -13,9 +13,9 @@ export const readContents = () => {
   return uniq(lines);
 };
 
-export const createOutputDir = () => {
+export const createOutputDir = (base: string) => {
   const name = moment().format('YYYYMMDD_HHmmss');
-  const full = OUTPUT_BASE_DIR + '/' + name;
+  const full = base + '/' + name;
   console.log('creating output directory:', full);
   mkdirSync(full);
   return full;
@@ -40,7 +40,10 @@ export const createDatasetFromMessages = (messages: string[]): Dataset => {
   });
 
   const prompt = [
-    'give me at most 3 topics discussed for each of the sentences below. Let the output be just the topics and nothing else. Let the format be YAML',
+    'give me at most 3 topics discussed for each of the sentences below. Let the output must only be in the format:',
+    'A: topic 1, topic, 2',
+    'B: topic 1, topic 2',
+    'C: topic 1, topic 2',
     '',
     '',
     input,
@@ -56,13 +59,23 @@ export const createDatasetFromMessages = (messages: string[]): Dataset => {
 export const getKeyAndTopicsFromText = (
   text: string,
 ): { key?: string; topics?: string[] } => {
-  const regex = /^([A-Za-z]:.*?)\s*(.*)$/;
+  const regex = /^([A-Za-z])\s*:\s*(.*?)$/;
   const matches = text.match(regex);
 
-  if (!matches) return {};
+  if (!matches) return { topics: [] };
 
   return {
     key: matches[1].trim(),
     topics: matches[2].split(',').map((t) => t.trim()),
   };
+};
+
+export const getArgs = () => {
+  return process.argv.slice(2).reduce((acc, arg) => {
+    const [k, v] = arg.split('=');
+    return {
+      ...acc,
+      [k]: v,
+    };
+  }, {});
 };
