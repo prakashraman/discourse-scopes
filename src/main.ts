@@ -14,15 +14,14 @@ import slugify from 'slugify';
 
 const args = getArgs();
 
-if (!args['conversations'])
-  throw new Error('"conversions" parameter is missing.');
-
-if (!args['out'])
+if (!args['data'])
   throw new Error(
-    '"out" parameter is missing. this parameter determines where the output will be stored',
+    '"data" parameter is missing. this parameter determines where the output will be stored',
   );
 
-const outputDir = createOutputDir(args['out']);
+const DATA_DIR = args['data'];
+
+const outputDir = createOutputDir(DATA_DIR);
 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const CONFIGURATION = new Configuration({
@@ -30,13 +29,13 @@ const CONFIGURATION = new Configuration({
 });
 const OPENAI = new OpenAIApi(CONFIGURATION);
 
-const conversations = readContents();
+const conversations = readContents(DATA_DIR);
 const cleanedFiledPath = outputDir + '/' + '__conversations-cleaned.txt';
 console.log('storing cleaned conversation at:', cleanedFiledPath);
 console.log(`parsing through conversations: `, conversations.length);
 writeFileSync(cleanedFiledPath, conversations.join('\n'));
 
-const chunks = chunk(conversations, 5);
+const chunks = chunk(conversations, 10);
 
 var allTopics = [];
 var bank: { [key: string]: string[] } = {};
@@ -51,6 +50,7 @@ const queryOpenAi = async (dataset: Dataset) => {
     });
     // console.log({ dataset });
     const content = completion.data.choices[0].text;
+    // console.log(completion.data.choices);
     // console.log(content);
     content.split('\n').forEach((text) => {
       // console.log({ text });

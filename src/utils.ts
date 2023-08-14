@@ -1,12 +1,12 @@
 import { readFileSync, mkdirSync } from 'fs';
 import { uniq, map } from 'lodash';
 import moment from 'moment';
+import { resolve } from 'path';
 
-const INPUT_FILE_PATH = './data/conversations.txt';
-const OUTPUT_BASE_DIR = './output';
+const INPUT_FILE_NAME = 'conversations.txt';
 
-export const readContents = () => {
-  const response = readFileSync(INPUT_FILE_PATH, 'utf-8');
+export const readContents = (basePath: string) => {
+  const response = readFileSync(resolve(basePath, INPUT_FILE_NAME), 'utf-8');
   const lines = response.split('\n').filter((l) => {
     return l.trim() != '';
   });
@@ -15,7 +15,7 @@ export const readContents = () => {
 
 export const createOutputDir = (base: string) => {
   const name = moment().format('YYYYMMDD_HHmmss');
-  const full = base + '/' + name;
+  const full = resolve(base, `output_${name}`);
   console.log('creating output directory:', full);
   mkdirSync(full);
   return full;
